@@ -1,0 +1,45 @@
+# Telegram Auto Check-in Configuration File
+# Supports environment-specific config override: Set APP_ENV=test to load config.test.yaml
+
+# Language setting (optional)
+# Supported: en (English) | zh (Chinese), default: en
+# Can also be set via environment variable: TG_LANGUAGE
+language: "en"
+
+# Optional, SOCKS5 proxy address, e.g. "127.0.0.1:1080"
+# Can also be set via environment variable: TG_PROXY
+proxy: ""
+
+# App credentials, get them from https://my.telegram.org/apps
+# Can also be set via environment variables: TG_APP_ID, TG_APP_HASH
+app_id: 
+app_hash: ""
+
+# Log configuration (optional)
+log:
+  dir: "./log"      # Log directory, default: ./log, main log: app.log, task logs in tasks subdirectory
+  level: "info"     # Log level: debug | info | warn | error, default: info
+  format: "text"    # Log format: text (console format) | json (JSON format), default: text
+
+# Account information and tasks
+accounts:
+  - name: "" # Optional, account name for identifying multiple accounts
+    # Phone number, can also be set via environment variable: TG_ACCOUNTS_0_PHONE
+    phone: ""
+    # Two-factor authentication password. Leave empty if not enabled
+    # Can also be set via environment variable: TG_ACCOUNTS_0_PASSWORD
+    password: ""
+    # Task execution configuration (optional)
+    worker_count: 4        # Number of concurrent workers, default: 4
+    task_queue_size: 100   # Task queue size, default: 100
+    tasks:
+      - name: "" # Task name for identifying multiple tasks
+        target: "" # Target chat, can be username (starting with @) or user ID
+        # Master switch, task will not execute when disabled (including run_on_start)
+        enabled: true 
+        method: "message" # Task method, currently only "message" is supported
+        payload: "/checkin" # Message content to send
+        schedule: "0 9 * * *" # Scheduled execution using cron expression
+        run_on_start: true # Execute once on startup
+        reply_wait_seconds: 10 # Time to wait for reply in seconds
+        reply_history_limit: 2 # Number of historical messages to check

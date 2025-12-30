@@ -1,0 +1,57 @@
+# English translations
+invalid_log_level: "Invalid log level"
+fallback_level: "Fallback level"
+
+# Task execution
+task_start_on_start: "Starting task execution..."
+task_start_scheduled: "Scheduled task execution..."
+task_start_normal: "Task execution..."
+task_failed_on_start: "Failed to start task"
+task_failed_scheduled: "Scheduled task failed"
+task_failed: "Task failed"
+task_success: "Task completed successfully"
+task_queue_full: "Task queue is full, dropping task"
+
+# Task logger
+failed_create_task_log: "Failed to create task log file, using main log"
+
+# Account execution
+no_enabled_tasks: "No enabled tasks, skipping"
+start_tasks: "Starting tasks"
+account_config_incomplete: "Account configuration incomplete"
+client_creation_failed: "Failed to create client"
+auth_failed: "Account authentication failed"
+some_tasks_failed: "Some tasks failed"
+all_tasks_completed: "All tasks completed"
+no_runnable_tasks: "No runnable tasks configured, skipping account"
+task_add_failed: "Failed to add scheduled task"
+
+# Scheduler
+no_scheduled_tasks: "No scheduled tasks, scheduler not started"
+scheduler_started: "Scheduler started"
+
+# Client
+using_proxy: "Using proxy connection"
+phone_login: "Logging in with phone number..."
+qrcode_login: "No phone number provided, trying QR code login"
+waiting_for_reply: "Waiting for reply..."
+received_reply: "Received reply"
+sent_no_reply: "Sent (no reply)"
+get_history_failed: "Failed to get message history"
+message_sent: "Message sent"
+button_clicked: "Button clicked"
+button_clicked_no_reply: "Button clicked (no reply)"
+received_url: "Received URL"
+api_response_details: "API response details"
+
+# Config
+task_count: "task count"
+total_count: "total"
+failed_count: "failed count"
+payload: "payload"
+task: "task"
+target: "target"
+reply: "reply"
+schedule: "schedule"
+url: "url"
+proxy: "proxy"

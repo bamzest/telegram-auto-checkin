@@ -1,0 +1,166 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
+
+version: 2
+project_name: telegram-auto-checkin
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod verify
+
+builds:
+  - id: telegram-auto-checkin
+    binary: telegram-auto-checkin
+    env:
+      - CGO_ENABLED=0
+
+    goos:
+      - linux
+      - darwin
+      - windows
+      - freebsd
+      - openbsd
+      - netbsd
+
+    goarch:
+      - "386"
+      - amd64
+      - arm
+      - arm64
+
+    goarm:
+      - "6"
+      - "7"
+
+    ignore:
+      - goos: darwin
+        goarch: "386"
+      - goos: windows
+        goarch: arm
+        goarm: "6"
+      - goos: windows
+        goarch: arm
+        goarm: "7"
+
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.GitCommit={{.ShortCommit}}
+      - -X main.BuildTime={{.Date}}
+
+archives:
+  - formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - README.md
+      - LICENSE
+      - config.yaml
+      - locales
+
+dockers_v2:
+  - id: telegram-auto-checkin-image
+    dockerfile: Dockerfile
+    ids:
+      - telegram-auto-checkin
+    images:
+      - ghcr.io/{{ .Env.GH_DOCKER_OWNER }}/telegram-auto-checkin
+    tags:
+      - "{{ .Version }}"
+      - latest
+    extra_files:
+      - README.md
+      - LICENSE
+      - config.yaml
+      - locales
+    platforms:
+      - linux/amd64
+      - linux/arm64
+      - linux/arm/v7
+    flags:
+      - "--pull"
+      - "--cache-from=type=gha,scope=telegram-auto-checkin"
+      - "--cache-to=type=gha,scope=telegram-auto-checkin,mode=max"
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - 'README'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: 'Features'
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: 'Performance Improvements'
+      regexp: '^.*?perf(\(.+\))??!?:.+$'
+      order: 2
+    - title: 'Refactoring'
+      regexp: '^.*?refactor(\(.+\))??!?:.+$'
+      order: 3
+    - title: 'Other Changes'
+      order: 999
+
+release:
+  github:
+    owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
+    name: "{{ .Env.REPO_NAME }}"
+  draft: false
+  prerelease: auto
+  name_template: "{{.Tag}}"
+  make_latest: true
+  header: |
+    ## Telegram Auto Check-in {{ .Version }}
+
+    Release Date: {{ .Date }}
+
+    ### Download Instructions
+
+    Choose the appropriate file based on your operating system and architecture:
+
+    - **Linux**: `*_linux_*.tar.gz`
+    - **macOS**: `*_darwin_*.tar.gz`
+    - **Windows**: `*_windows_*.zip`
+
+    Architecture:
+    - `x86_64` / `amd64`: 64-bit x86 architecture
+    - `arm64`: 64-bit ARM architecture (Apple Silicon, Raspberry Pi 4, etc.)
+    - `armv7`: 32-bit ARM architecture (Raspberry Pi older versions, etc.)
+
+    ---
+
+  footer: |
+    ---
+
+    **Full Changelog**: https://github.com/{{ .Env.GH_DOCKER_OWNER }}/telegram-auto-checkin/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+    **Docker Images**:
+    - `ghcr.io/{{ .Env.GH_DOCKER_OWNER }}/telegram-auto-checkin:{{ .Version }}`
+    - `ghcr.io/{{ .Env.GH_DOCKER_OWNER }}/telegram-auto-checkin:latest`

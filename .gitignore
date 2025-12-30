@@ -1,0 +1,50 @@
+# Session directory
+session/
+
+# Config files (contains sensitive information)
+config.*.yaml
+
+# Log files
+log/
+*.log
+
+# Go build artifacts
+telegram-auto-checkin
+telegram-auto-checkin.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go test and coverage files
+*.test
+*.out
+
+# Go dependencies
+vendor/
+go.work
+
+# Build artifacts
+dist/
+*.tar.gz
+*.zip
+
+# Environment files
+.env
+.env.local
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+coverage.txt
+coverage.html
+
+# Temp files
+tmp/
+temp/
