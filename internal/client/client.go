@@ -113,7 +113,7 @@ func (c *Client) AuthInRun(ctx context.Context, phone, password string) error {
 	}
 
 	if phone != "" {
-		 c.log.Info().Msg("Logging in with phone number...")
+		c.log.Info().Msg("Logging in with phone number...")
 		flow := auth.NewFlow(
 			auth.Constant(phone, password, auth.CodeAuthenticatorFunc(func(ctx context.Context, sentCode *tg.AuthSentCode) (string, error) {
 				fmt.Printf("Please enter verification code for %s: ", phone)
@@ -198,7 +198,8 @@ func (c *Client) CheckInButton(ctx context.Context, target string, buttonText st
 }
 
 func (c *Client) CheckInMessageInRun(ctx context.Context, target string, message string) error {
-	taskLog := c.log.With().Str("target", target).Logger()
+	taskLog := c.log.With().Str("target", target).Str("payload", message).Logger()
+	taskLog.Info().Msg("Sending message...")
 	peer, err := c.resolvePeer(ctx, target)
 	if err != nil {
 		return err
@@ -213,10 +214,10 @@ func (c *Client) CheckInMessageInRun(ctx context.Context, target string, message
 		return err
 	}
 
-	logSendMessageResult(taskLog, updates)
+	responseType, messageID := parseSendMessageResult(updates)
 
 	// Wait for bot reply
-	 taskLog.Info().Int("wait_seconds", c.replyWaitSeconds).Msg("Waiting for reply...")
+	taskLog.Info().Int("wait_seconds", c.replyWaitSeconds).Msg("Waiting for reply...")
 	time.Sleep(time.Duration(c.replyWaitSeconds) * time.Second)
 
 	// Get latest messages
@@ -273,9 +274,16 @@ func (c *Client) CheckInMessageInRun(ctx context.Context, target string, message
 	}
 
 	if botReply != "" {
-		taskLog.Info().Str("reply", botReply).Msg("Received reply")
+		taskLog.Info().
+			Str("response_type", responseType).
+			Int("message_id", messageID).
+			Str("reply", botReply).
+			Msg("Message completed")
 	} else {
-		taskLog.Info().Msg("Sent (no reply)")
+		taskLog.Info().
+			Str("response_type", responseType).
+			Int("message_id", messageID).
+			Msg("Message completed (no reply)")
 	}
 
 	return nil
@@ -283,7 +291,11 @@ func (c *Client) CheckInMessageInRun(ctx context.Context, target string, message
 
 // CheckInMessageInRunWithLogger Send text message for check-in (with task logger)
 func (c *Client) CheckInMessageInRunWithLogger(ctx context.Context, target string, message string, taskLogger zerolog.Logger) error {
-	taskLog := taskLogger.With().Str("target", target).Logger()
+	taskLog := taskLogger.With().Str("target", target).Str("payload", message).Logger()
+	mainLog := c.log.With().Str("target", target).Str("payload", message).Logger()
+
+	taskLog.Info().Msg("Sending message...")
+	mainLog.Info().Msg("Sending message...")
 	peer, err := c.resolvePeer(ctx, target)
 	if err != nil {
 		return err
@@ -298,7 +310,7 @@ func (c *Client) CheckInMessageInRunWithLogger(ctx context.Context, target strin
 		return err
 	}
 
-	logSendMessageResult(taskLog, updates)
+	responseType, messageID := parseSendMessageResult(updates)
 
 	// Wait for bot reply
 	taskLog.Info().Int("wait_seconds", c.replyWaitSeconds).Msg("Waiting for reply...")
@@ -356,18 +368,29 @@ func (c *Client) CheckInMessageInRunWithLogger(ctx context.Context, target strin
 	}
 
 	if botReply != "" {
-		// Write to both main log and task log
-		c.log.Info().Str("target", target).Str("reply", botReply).Msg("Received reply")
-		taskLog.Info().Str("reply", botReply).Msg("Received reply")
+		combined := []zerolog.Logger{
+			taskLog.With().Str("response_type", responseType).Int("message_id", messageID).Logger(),
+			mainLog.With().Str("response_type", responseType).Int("message_id", messageID).Logger(),
+		}
+		for _, lg := range combined {
+			lg.Info().Str("reply", botReply).Msg("Message completed")
+		}
 	} else {
-		taskLog.Info().Msg("Sent (no reply)")
+		combined := []zerolog.Logger{
+			taskLog.With().Str("response_type", responseType).Int("message_id", messageID).Logger(),
+			mainLog.With().Str("response_type", responseType).Int("message_id", messageID).Logger(),
+		}
+		for _, lg := range combined {
+			lg.Info().Msg("Message completed (no reply)")
+		}
 	}
 
 	return nil
 }
 
 func (c *Client) CheckInButtonInRun(ctx context.Context, target string, buttonText string) error {
-	taskLog := c.log.With().Str("target", target).Logger()
+	taskLog := c.log.With().Str("target", target).Str("button_text", buttonText).Logger()
+	taskLog.Info().Msg("Clicking button...")
 	peer, err := c.resolvePeer(ctx, target)
 	if err != nil {
 		return err
@@ -422,7 +445,12 @@ func (c *Client) CheckInButtonInRun(ctx context.Context, target string, buttonTe
 					return err
 				}
 
-				logCallbackAnswer(taskLog, answer)
+				replyText, url := parseCallbackAnswer(answer)
+				taskLog.Info().
+					Int("message_id", msg.ID).
+					Str("reply", replyText).
+					Str("url", url).
+					Msg("Button click completed")
 				return nil
 			}
 		}
@@ -433,7 +461,11 @@ func (c *Client) CheckInButtonInRun(ctx context.Context, target string, buttonTe
 
 // CheckInButtonInRunWithLogger Click button for check-in (with task logger)
 func (c *Client) CheckInButtonInRunWithLogger(ctx context.Context, target string, buttonText string, taskLogger zerolog.Logger) error {
-	taskLog := taskLogger.With().Str("target", target).Logger()
+	taskLog := taskLogger.With().Str("target", target).Str("button_text", buttonText).Logger()
+	mainLog := c.log.With().Str("target", target).Str("button_text", buttonText).Logger()
+
+	taskLog.Info().Msg("Clicking button...")
+	mainLog.Info().Msg("Clicking button...")
 	peer, err := c.resolvePeer(ctx, target)
 	if err != nil {
 		return err
@@ -488,9 +520,17 @@ func (c *Client) CheckInButtonInRunWithLogger(ctx context.Context, target string
 					return err
 				}
 
-				// Write to both main log and task log
-				logCallbackAnswer(c.log.With().Str("target", target).Logger(), answer)
-				logCallbackAnswer(taskLog, answer)
+				replyText, url := parseCallbackAnswer(answer)
+				combined := []zerolog.Logger{
+					taskLog.With().Int("message_id", msg.ID).Logger(),
+					mainLog.With().Int("message_id", msg.ID).Logger(),
+				}
+				for _, lg := range combined {
+					lg.Info().
+						Str("reply", replyText).
+						Str("url", url).
+						Msg("Button click completed")
+				}
 				return nil
 			}
 		}
@@ -499,40 +539,29 @@ func (c *Client) CheckInButtonInRunWithLogger(ctx context.Context, target string
 	return fmt.Errorf("button with text %q not found", buttonText)
 }
 
-func logSendMessageResult(log zerolog.Logger, updates tg.UpdatesClass) {
+func parseSendMessageResult(updates tg.UpdatesClass) (responseType string, messageID int) {
 	switch u := updates.(type) {
 	case *tg.UpdateShortSentMessage:
-		 log.Info().Str("response_type", "updateShortSentMessage").Int("message_id", u.ID).Msg("Message sent")
-	 case *tg.Updates:
-		 log.Info().Str("response_type", "updates").Int("updates", len(u.Updates)).Msg("Message sent")
-	 case *tg.UpdatesCombined:
-		 log.Info().Str("response_type", "updatesCombined").Int("updates", len(u.Updates)).Msg("Message sent")
-	 default:
-		 log.Info().Str("response_type", fmt.Sprintf("%T", updates)).Msg("Message sent")
-	 }
+		return "updateShortSentMessage", u.ID
+	case *tg.Updates:
+		return "updates", 0
+	case *tg.UpdatesCombined:
+		return "updatesCombined", 0
+	default:
+		return fmt.Sprintf("%T", updates), 0
+	}
 }
 
-func logCallbackAnswer(log zerolog.Logger, answer *tg.MessagesBotCallbackAnswer) {
+func parseCallbackAnswer(answer *tg.MessagesBotCallbackAnswer) (replyText string, url string) {
 	if answer == nil {
-		 log.Info().Msg("Button clicked (no reply)")
-		 return
-	 }
+		return "Button clicked (no reply)", ""
+	}
 
-	 if answer.Message != "" {
-		 log.Info().Str("reply", answer.Message).Msg("Received reply")
-	 } else if answer.URL != "" {
-		 log.Info().Str("url", answer.URL).Msg("Received URL")
-	 } else {
-		 log.Info().Msg("Button clicked")
-	 }
-
-	 log.Info().
-		 Str("response_type", "messagesBotCallbackAnswer").
-		 Bool("alert", answer.Alert).
-		 Bool("has_url", answer.HasURL).
-		 Bool("native_ui", answer.NativeUI).
-		 Str("message", answer.Message).
-		 Str("url", answer.URL).
-		 Int("cache_time", answer.CacheTime).
-		 Msg("API response details")
+	if answer.Message != "" {
+		return answer.Message, ""
+	}
+	if answer.URL != "" {
+		return "", answer.URL
+	}
+	return "Button clicked", ""
 }

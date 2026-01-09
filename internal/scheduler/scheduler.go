@@ -57,6 +57,22 @@ func isTaskEnabled(task config.TaskConfig) bool {
 	return *task.Enabled
 }
 
+func formatAccountLabel(acc config.AccountConfig, sessionName string) string {
+	if acc.Name != "" && acc.Phone != "" {
+		return fmt.Sprintf("%s(%s)", acc.Name, acc.Phone)
+	}
+	if acc.Name != "" {
+		return acc.Name
+	}
+	if acc.Phone != "" {
+		return acc.Phone
+	}
+	if sessionName != "" {
+		return sessionName
+	}
+	return "unknown_account"
+}
+
 func executeTask(ctx context.Context, client taskClient, task config.TaskConfig) error {
 	switch task.Method {
 	case "message":
@@ -93,7 +109,8 @@ func runTasksOnce(ctx context.Context, cfg *config.Config, log zerolog.Logger, f
 		// Session file name
 		sessionFile := sessionName + ".session"
 
-		accLog := log.With().Str("account", sessionName).Logger()
+		accountLabel := formatAccountLabel(acc, sessionName)
+		accLog := log.With().Str("account", accountLabel).Str("session", sessionName).Logger()
 
 		// Count enabled tasks
 		enabledTaskCount := 0
@@ -142,7 +159,7 @@ func runTasksOnce(ctx context.Context, cfg *config.Config, log zerolog.Logger, f
 				queueSize = 100
 			}
 
-			exec := executor.NewTaskExecutor(client, workerCount, queueSize, accLog, cfg.Log.Dir, cfg.Log.Format, sessionName)
+			exec := executor.NewTaskExecutor(client, workerCount, queueSize, accLog, cfg.Log.Dir, cfg.Log.Format, accountLabel)
 			exec.Start(ctx)
 			defer exec.Stop()
 
@@ -192,7 +209,8 @@ func RunTasks(ctx context.Context, cfg *config.Config, log zerolog.Logger) error
 		// Session file name
 		sessionFile := sessionName + ".session"
 
-		accLog := log.With().Str("account", sessionName).Logger()
+		accountLabel := formatAccountLabel(acc, sessionName)
+		accLog := log.With().Str("account", accountLabel).Str("session", sessionName).Logger()
 
 		hasImmediateTasks := false
 		hasScheduledTasks := false
@@ -250,7 +268,7 @@ func RunTasks(ctx context.Context, cfg *config.Config, log zerolog.Logger) error
 				queueSize = 100
 			}
 
-			exec := executor.NewTaskExecutor(client, workerCount, queueSize, accLog, cfg.Log.Dir, cfg.Log.Format, sessionName)
+			exec := executor.NewTaskExecutor(client, workerCount, queueSize, accLog, cfg.Log.Dir, cfg.Log.Format, accountLabel)
 			exec.Start(ctx)
 			defer exec.Stop()
 

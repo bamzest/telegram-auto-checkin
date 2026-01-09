@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -26,6 +27,7 @@ type TaskRequest struct {
 	Logger      zerolog.Logger
 	TriggerType string // "run_on_start" or "scheduled"
 	WorkerID    int
+	RequestID   string
 }
 
 // TaskExecutor manages concurrent worker pool
@@ -112,6 +114,14 @@ func (e *TaskExecutor) executeTask(ctx context.Context, req TaskRequest) {
 	if taskName == "" {
 		taskName = req.Task.Target
 	}
+	trigger := req.TriggerType
+	if trigger == "" {
+		trigger = "unspecified"
+	}
+	requestID := req.RequestID
+	if requestID == "" {
+		requestID = newRequestID()
+	}
 
 	// Create separate log file for task
 	taskLogger, logFile, err := logger.CreateTaskLogger(e.logDir, e.accountName, taskName, req.TriggerType, e.logFormat)
@@ -127,69 +137,47 @@ func (e *TaskExecutor) executeTask(ctx context.Context, req TaskRequest) {
 		Str("thread_name", taskName).
 		Str("task", taskName).
 		Str("target", req.Task.Target).
+		Str("method", req.Task.Method).
+		Str("trigger", trigger).
+		Str("request_id", requestID).
+		Logger()
+	mainLog := req.Logger.With().
+		Int("thread_id", req.WorkerID).
+		Str("thread_name", taskName).
+		Str("task", taskName).
+		Str("target", req.Task.Target).
+		Str("method", req.Task.Method).
+		Str("trigger", trigger).
+		Str("request_id", requestID).
 		Logger()
 
 	// Display different logs based on trigger type
 	if req.TriggerType == "run_on_start" {
 		taskLog.Info().Msg("Executing startup task...")
-		req.Logger.Debug().
-			Int("thread_id", req.WorkerID).
-			Str("thread_name", taskName).
-			Str("task", taskName).
-			Msg("Executing startup task...")
+		mainLog.Info().Msg("Account started check-in task")
 	} else if req.TriggerType == "scheduled" {
 		taskLog.Info().Msg("Executing scheduled task...")
-		req.Logger.Debug().
-			Int("thread_id", req.WorkerID).
-			Str("thread_name", taskName).
-			Str("task", taskName).
-			Msg("Executing scheduled task...")
+		mainLog.Info().Msg("Account triggered scheduled check-in task")
 	} else {
 		taskLog.Info().Msg("Executing task...")
-		req.Logger.Debug().
-			Int("thread_id", req.WorkerID).
-			Str("thread_name", taskName).
-			Str("task", taskName).
-			Msg("Executing task...")
+		mainLog.Info().Msg("Account triggered check-in task")
 	}
 
 	// Execute task directly, gotd library handles concurrency safety internally
 	if err := executeTaskWithLogger(ctx, e.client, req.Task, taskLog); err != nil {
 		if req.TriggerType == "run_on_start" {
 			taskLog.Error().Err(err).Str("payload", req.Task.Payload).Msg("Startup task failed")
-			req.Logger.Error().
-				Err(err).
-				Int("thread_id", req.WorkerID).
-				Str("thread_name", taskName).
-				Str("task", taskName).
-				Str("payload", req.Task.Payload).
-				Msg("Startup task failed")
+			mainLog.Error().Err(err).Str("payload", req.Task.Payload).Msg("Startup task failed")
 		} else if req.TriggerType == "scheduled" {
 			taskLog.Error().Err(err).Str("payload", req.Task.Payload).Msg("Scheduled task failed")
-			req.Logger.Error().
-				Err(err).
-				Int("thread_id", req.WorkerID).
-				Str("thread_name", taskName).
-				Str("task", taskName).
-				Str("payload", req.Task.Payload).
-				Msg("Scheduled task failed")
+			mainLog.Error().Err(err).Str("payload", req.Task.Payload).Msg("Scheduled task failed")
 		} else {
 			taskLog.Error().Err(err).Str("payload", req.Task.Payload).Msg("Task failed")
-			req.Logger.Error().
-				Err(err).
-				Int("thread_id", req.WorkerID).
-				Str("thread_name", taskName).
-				Str("task", taskName).
-				Str("payload", req.Task.Payload).
-				Msg("Task failed")
+			mainLog.Error().Err(err).Str("payload", req.Task.Payload).Msg("Task failed")
 		}
 	} else {
 		taskLog.Info().Msg("Task completed successfully")
-		req.Logger.Info().
-			Int("thread_id", req.WorkerID).
-			Str("thread_name", taskName).
-			Str("task", taskName).
-			Msg("Task completed successfully")
+		mainLog.Info().Msg("Task completed successfully")
 	}
 }
 
@@ -219,21 +207,23 @@ func executeTaskWithLogger(ctx context.Context, client taskClient, task config.T
 
 // SubmitTask submits task to execution queue (non-blocking)
 func (e *TaskExecutor) SubmitTask(task config.TaskConfig, logger zerolog.Logger, triggerType string) bool {
+	requestID := newRequestID()
 	select {
-	case e.taskQueue <- TaskRequest{Task: task, Logger: logger, TriggerType: triggerType}:
+	case e.taskQueue <- TaskRequest{Task: task, Logger: logger, TriggerType: triggerType, RequestID: requestID}:
 		return true
 	default:
-		logger.Warn().Str("task", task.Name).Msg("⚠️ Task queue is full, dropping task")
+		logger.Warn().Str("task", task.Name).Str("target", task.Target).Msg("⚠️ Task queue is full, dropping task")
 		return false
 	}
 }
 
 // SubmitTaskBlocking submits task to execution queue (blocking)
 func (e *TaskExecutor) SubmitTaskBlocking(ctx context.Context, task config.TaskConfig, logger zerolog.Logger, triggerType string) bool {
+	requestID := newRequestID()
 	select {
 	case <-ctx.Done():
 		return false
-	case e.taskQueue <- TaskRequest{Task: task, Logger: logger, TriggerType: triggerType}:
+	case e.taskQueue <- TaskRequest{Task: task, Logger: logger, TriggerType: triggerType, RequestID: requestID}:
 		return true
 	}
 }
@@ -249,4 +239,9 @@ func (e *TaskExecutor) Stop() {
 // QueueLen returns the queue length
 func (e *TaskExecutor) QueueLen() int {
 	return len(e.taskQueue)
+}
+
+// newRequestID returns a simple monotonic-ish identifier for correlating send/receive logs.
+func newRequestID() string {
+	return fmt.Sprintf("%x", time.Now().UnixNano())
 }
